@@ -47,27 +47,23 @@ A comprehensive FastAPI backend for the Wellness Tracker application with MongoD
 
 3. **Configure environment variables:**
    
-   Create a `.env` file in the backend directory with:
+   Create a `.env.example` file in the backend directory with:
    ```env
    # MongoDB Configuration
-   MONGO_DB_URI=mongodb://localhost:27017
-   DATABASE_NAME=wellness_tracker
+   MONGO_DB_URI=mongodb://your_mongodb_host:port
+   DATABASE_NAME=your_database_name
 
-   # JWT Configuration (generate a secure secret key)
-   JWT_SECRET_KEY=your_super_secret_jwt_key_here_make_it_long_and_random
+   # JWT Configuration
+   JWT_SECRET_KEY=your_jwt_secret_key
    JWT_ALGORITHM=HS256
    JWT_ACCESS_TOKEN_EXPIRE_MINUTES=30
    JWT_REFRESH_TOKEN_EXPIRE_DAYS=7
 
    # API Configuration
-   PROJECT_NAME=Wellness Tracker API
+   PROJECT_NAME=Your Project Name
    ```
 
-   **For MongoDB Atlas:**
-   ```env
-   MONGO_DB_URI=mongodb+srv://username:password@cluster.mongodb.net/
-   DATABASE_NAME=wellness_tracker
-   ```
+   Copy this file to `.env` and replace the placeholder values with your actual configuration.
 
 4. **Initialize the database:**
    The database will be automatically initialized when you first run the application.
