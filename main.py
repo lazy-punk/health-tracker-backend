@@ -72,11 +72,11 @@ app.add_middleware(
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
-
+host = os.getenv("FRONTEND_URL").split("//")[1]
 # Add trusted host middleware for security
 app.add_middleware(
-    TrustedHostMiddleware, 
-    allowed_hosts=["localhost", "127.0.0.1", "*.localhost", os.getenv("FRONTEND_URL")]
+    TrustedHostMiddleware,
+    allowed_hosts=["localhost", "127.0.0.1", "*.localhost", host]
 )
 
 # Security headers middleware
