@@ -1,8 +1,10 @@
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
+from pydantic import BaseModel
+from typing import Any, Dict, Optional
 import logging
 import os
 from dotenv import load_dotenv
@@ -17,6 +19,15 @@ from auth import get_security_headers
 
 # Load environment variables
 load_dotenv()
+
+# Test models
+class TestBody(BaseModel):
+    """Flexible test body model"""
+    message: Optional[str] = None
+    data: Optional[Dict[str, Any]] = None
+    
+    class Config:
+        extra = "allow"  # Allow additional fields
 
 # Configure logging
 logging.basicConfig(
@@ -131,6 +142,123 @@ async def health_check():
                 "error": str(e)
             }
         )
+    
+@app.post("/test")
+async def test(request: Request):
+    """Test endpoint - returns the entire request body"""
+    try:
+        # Get the request body as JSON
+        body = await request.json()
+        return {
+            "received_body": body,
+            "body_type": type(body).__name__,
+            "message": "Successfully received POST request body"
+        }
+    except Exception as e:
+        # If JSON parsing fails, try to get raw body
+        try:
+            raw_body = await request.body()
+            return {
+                "received_body": raw_body.decode('utf-8'),
+                "body_type": "raw_string",
+                "message": "Received raw body (not JSON)"
+            }
+        except Exception as parse_error:
+                         return {
+                 "error": str(e),
+                 "parse_error": str(parse_error),
+                 "message": "Failed to parse request body"
+             }
+
+@app.post("/test-structured")
+async def test_structured(body: TestBody):
+    """Test endpoint with structured body using Pydantic"""
+    return {
+        "received_body": body.dict(),
+        "message": f"Received structured data: {body.message or 'No message provided'}",
+        "extra_fields": {k: v for k, v in body.dict().items() if k not in ['message', 'data']},
+        "data_provided": body.data is not None
+    }
+
+@app.post("/test-form")
+async def test_form(request: Request):
+    """Test endpoint that can handle all types of form data"""
+    content_type = request.headers.get("content-type", "")
+    
+    try:
+        if "application/json" in content_type:
+            # Handle JSON data
+            body = await request.json()
+            return {
+                "data_type": "JSON",
+                "content_type": content_type,
+                "received_data": body,
+                "message": "Successfully parsed JSON data"
+            }
+        
+        elif "multipart/form-data" in content_type:
+            # Handle multipart form data
+            form_data = await request.form()
+            parsed_data = {}
+            for key, value in form_data.items():
+                parsed_data[key] = value
+            
+            return {
+                "data_type": "Multipart Form Data",
+                "content_type": content_type,
+                "received_data": parsed_data,
+                "field_count": len(parsed_data),
+                "message": "Successfully parsed multipart form data"
+            }
+        
+        elif "application/x-www-form-urlencoded" in content_type:
+            # Handle URL encoded form data
+            form_data = await request.form()
+            parsed_data = {}
+            for key, value in form_data.items():
+                parsed_data[key] = value
+            
+            return {
+                "data_type": "URL Encoded Form Data",
+                "content_type": content_type,
+                "received_data": parsed_data,
+                "field_count": len(parsed_data),
+                "message": "Successfully parsed URL encoded form data"
+            }
+        
+        else:
+            # Handle raw data
+            raw_body = await request.body()
+            return {
+                "data_type": "Raw Data",
+                "content_type": content_type,
+                "received_data": raw_body.decode('utf-8') if raw_body else "",
+                "message": "Received raw body data"
+            }
+            
+    except Exception as e:
+        return {
+            "error": str(e),
+            "content_type": content_type,
+                         "message": "Failed to parse request data"
+         }
+
+@app.post("/test-form-simple")
+async def test_form_simple(
+    message: str = Form(...),
+    password: str = Form(None),
+    email: str = Form(None)
+):
+    """Simple form endpoint using FastAPI Form parameters"""
+    return {
+        "data_type": "FastAPI Form Parameters",
+        "received_data": {
+            "message": message,
+            "password": password,
+            "email": email
+        },
+        "message": f"Hello {message}! Form data received successfully."
+    }
 
 # Global exception handler
 @app.exception_handler(Exception)
