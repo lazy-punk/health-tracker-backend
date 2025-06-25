@@ -75,7 +75,7 @@ app.add_middleware(
 # Add trusted host middleware for security
 app.add_middleware(
     TrustedHostMiddleware,
-    allowed_hosts=["localhost", "127.0.0.1", "*.localhost", "*.netlify.app"]
+    allowed_hosts=["localhost", "127.0.0.1", "*.localhost", "*.netlify.app", "*.onrender.com"]
 )
 
 # Security headers middleware
