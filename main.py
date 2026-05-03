@@ -45,8 +45,8 @@ logging.basicConfig(
 
 # Get logger for this module
 logger = logging.getLogger(__name__)
-
-logger.addHandler(handler)
+if handler:
+    logger.addHandler(handler)
 
 # Test models
 class TestBody(BaseModel):
