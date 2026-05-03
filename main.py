@@ -26,10 +26,13 @@ load_dotenv()
 # print(os.getenv("LOGTAIL_SOURCE_TOKEN"))
 # print(os.getenv("LOGTAIL_HOST"))
 
-handler = LogtailHandler(
-    source_token=os.getenv("LOGTAIL_SOURCE_TOKEN"),
-    host=os.getenv("LOGTAIL_HOST")
-)
+if os.getenv("LOGTAIL_SOURCE_TOKEN") and os.getenv("LOGTAIL_HOST"):
+    handler = LogtailHandler(
+        source_token=os.getenv("LOGTAIL_SOURCE_TOKEN"),
+        host=os.getenv("LOGTAIL_HOST")
+    )
+else:
+    handler = None
 
 # Configure logging with comprehensive setup
 logging.basicConfig(
