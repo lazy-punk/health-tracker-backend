@@ -17,11 +17,12 @@ load_dotenv()
 
 # Get logger for this module
 logger = logging.getLogger(__name__)
-handler = LogtailHandler(
-    source_token=os.getenv("LOGTAIL_SOURCE_TOKEN"),
-    host=os.getenv("LOGTAIL_HOST")
-)
-logger.addHandler(handler)
+if os.getenv("LOGTAIL_SOURCE_TOKEN") and os.getenv("LOGTAIL_HOST"):
+    handler = LogtailHandler(
+        source_token=os.getenv("LOGTAIL_SOURCE_TOKEN"),
+        host=os.getenv("LOGTAIL_HOST")
+    )
+    logger.addHandler(handler)
 
 # ==================== PYDANTIC MODELS ====================
 

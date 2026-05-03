@@ -13,16 +13,18 @@ from models import UserModel, RecoveryKeyModel
 import logging
 
 load_dotenv()
-
-handler = LogtailHandler(
-    source_token=os.getenv("LOGTAIL_SOURCE_TOKEN"),
-    host=os.getenv("LOGTAIL_HOST")
-)
+logger = logging.getLogger(__name__)
+if os.getenv("LOGTAIL_SOURCE_TOKEN") and os.getenv("LOGTAIL_HOST"):
+    handler = LogtailHandler(
+        source_token=os.getenv("LOGTAIL_SOURCE_TOKEN"),
+        host=os.getenv("LOGTAIL_HOST")
+    )
+    logger.addHandler(handler)
 
 
 # Get logger for this module
-logger = logging.getLogger(__name__)
-logger.addHandler(handler)
+
+
 router = APIRouter(prefix="/auth", tags=["authentication"])
 security = HTTPBearer()
 

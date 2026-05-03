@@ -10,16 +10,19 @@ from models import UserModel, ProgressModel, AchievementModel, QuoteModel
 import logging
 import os
 from logtail import LogtailHandler
-
-handler = LogtailHandler(
-    source_token=os.getenv("LOGTAIL_SOURCE_TOKEN"),
-    host=os.getenv("LOGTAIL_HOST")
-)
-
-
-# Get logger for this module
+from dotenv import load_dotenv
+load_dotenv()
 logger = logging.getLogger(__name__)
-logger.addHandler(handler)
+if os.getenv("LOGTAIL_SOURCE_TOKEN") and os.getenv("LOGTAIL_HOST"):
+    handler = LogtailHandler(
+        source_token=os.getenv("LOGTAIL_SOURCE_TOKEN"),
+        host=os.getenv("LOGTAIL_HOST")
+    )
+
+
+    # Get logger for this module
+    
+    logger.addHandler(handler)
 router = APIRouter(prefix="/wellness", tags=["wellness"])
 
 # Request models
