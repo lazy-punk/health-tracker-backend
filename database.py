@@ -9,9 +9,21 @@ from pymongo.collection import Collection
 from pymongo.errors import PyMongoError, DuplicateKeyError
 from bson import ObjectId
 from dotenv import load_dotenv
+from pymongo.server_api import ServerApi
+from pymongo import errors
+from logtail import LogtailHandler
 
 # Load environment variables
 load_dotenv()
+
+# Get logger for this module
+logger = logging.getLogger(__name__)
+
+handler = LogtailHandler(
+    source_token=os.getenv("LOGTAIL_SOURCE_TOKEN"),
+    host=os.getenv("LOGTAIL_HOST")
+)
+logger.addHandler(handler)
 
 # MongoDB configuration
 MONGO_DB_URI = os.getenv("MONGO_DB_URI", "mongodb://localhost:27017")
@@ -35,14 +47,36 @@ def get_mongo_client() -> MongoClient:
     """Get MongoDB client instance"""
     global mongo_client
     if mongo_client is None:
+        logger.info("Establishing MongoDB connection...")
+        logger.debug(f"MongoDB URI: [REDACTED]")
+        logger.debug(f"Database name: {DATABASE_NAME}")
+        
         try:
-            mongo_client = MongoClient(MONGO_DB_URI)
+            # Create MongoClient with server API version
+            mongo_client = MongoClient(
+                MONGO_DB_URI,
+                server_api=ServerApi('1'),
+                serverSelectionTimeoutMS=5000,  # 5 second timeout
+                connectTimeoutMS=10000,  # 10 second connection timeout
+                socketTimeoutMS=20000,   # 20 second socket timeout
+            )
+            
             # Test the connection
             mongo_client.admin.command('ping')
-            logging.info("Connected to MongoDB successfully")
+            db = mongo_client[DATABASE_NAME]
+            
+            logger.info("MongoDB connection established successfully")
+            logger.debug(f"Connected to database: {DATABASE_NAME}")
+            
+        except errors.ServerSelectionTimeoutError as e:
+            logger.error(f"MongoDB connection timeout: {e}")
+            raise Exception(f"Failed to connect to MongoDB: Connection timeout")
+        except errors.ConnectionFailure as e:
+            logger.error(f"MongoDB connection failure: {e}")
+            raise Exception(f"Failed to connect to MongoDB: {e}")
         except Exception as e:
-            logging.error(f"Failed to connect to MongoDB: {e}")
-            raise
+            logger.error(f"Unexpected MongoDB connection error: {e}", exc_info=True)
+            raise Exception(f"Failed to connect to MongoDB: {e}")
     return mongo_client
 
 def get_database() -> Database:
@@ -65,61 +99,78 @@ def get_db_session():
         database = get_database()
         yield database
     except Exception as e:
-        logging.error(f"Database session error: {e}")
+        logger.error(f"Database session error: {e}")
         raise
 
 def create_indexes():
     """Create database indexes for optimal performance"""
+    logger.info("Creating database indexes...")
+    
     try:
         db = get_database()
         
         # Users collection indexes
+        logger.debug("Creating indexes for users collection...")
         users_collection = db[COLLECTIONS['users']]
         users_collection.create_index([("username", ASCENDING)], unique=True)
         users_collection.create_index([("email", ASCENDING)], unique=True)
         users_collection.create_index([("is_active", ASCENDING)])
         users_collection.create_index([("created_at", DESCENDING)])
+        logger.debug("Users collection indexes created")
         
         # User progress collection indexes
+        logger.debug("Creating indexes for progress collection...")
         progress_collection = db[COLLECTIONS['user_progress']]
         progress_collection.create_index([("user_id", ASCENDING), ("date", ASCENDING)], unique=True)
         progress_collection.create_index([("user_id", ASCENDING)])
         progress_collection.create_index([("date", DESCENDING)])
         progress_collection.create_index([("completed", ASCENDING)])
+        logger.debug("Progress collection indexes created")
         
         # Achievements collection indexes
+        logger.debug("Creating indexes for achievements collection...")
         achievements_collection = db[COLLECTIONS['achievements']]
         achievements_collection.create_index([("name", ASCENDING)], unique=True)
         achievements_collection.create_index([("requirement_type", ASCENDING)])
+        logger.debug("Achievements collection indexes created")
         
         # User achievements collection indexes
+        logger.debug("Creating indexes for user_achievements collection...")
         user_achievements_collection = db[COLLECTIONS['user_achievements']]
         user_achievements_collection.create_index([("user_id", ASCENDING), ("achievement_id", ASCENDING)], unique=True)
         user_achievements_collection.create_index([("user_id", ASCENDING)])
         user_achievements_collection.create_index([("earned_at", DESCENDING)])
+        logger.debug("User achievements collection indexes created")
         
         # Recovery keys collection indexes
+        logger.debug("Creating indexes for recovery_keys collection...")
         recovery_keys_collection = db[COLLECTIONS['recovery_keys']]
         recovery_keys_collection.create_index([("user_id", ASCENDING)])
         recovery_keys_collection.create_index([("key_hash", ASCENDING)])
         recovery_keys_collection.create_index([("created_at", DESCENDING)])
+        logger.debug("Recovery keys collection indexes created")
         
         # Quotes collection indexes
+        logger.debug("Creating indexes for quotes collection...")
         quotes_collection = db[COLLECTIONS['quotes']]
         quotes_collection.create_index([("category", ASCENDING)])
+        logger.debug("Quotes collection indexes created")
         
-        logging.info("Database indexes created successfully")
+        logger.info("Database indexes created successfully")
         
     except Exception as e:
-        logging.error(f"Error creating indexes: {e}")
+        logger.error(f"Error creating indexes: {e}", exc_info=True)
         raise
 
 def initialize_default_data():
     """Initialize default achievements and quotes"""
+    logger.info("Initializing default data...")
+    
     try:
         db = get_database()
         
         # Default achievements
+        logger.debug("Initializing default achievements...")
         achievements_collection = db[COLLECTIONS['achievements']]
         default_achievements = [
             {
@@ -180,6 +231,7 @@ def initialize_default_data():
                 pass
         
         # Default motivational quotes
+        logger.debug("Initializing default motivational quotes...")
         quotes_collection = db[COLLECTIONS['quotes']]
         default_quotes = [
             {
@@ -231,14 +283,16 @@ def initialize_default_data():
                 # Quote already exists, skip
                 pass
         
-        logging.info("Default data initialized successfully")
+        logger.info("Default data initialized successfully")
         
     except Exception as e:
-        logging.error(f"Error initializing default data: {e}")
+        logger.error(f"Error initializing default data: {e}", exc_info=True)
         raise
 
 def init_database():
     """Initialize database with collections, indexes, and default data"""
+    logger.info("Initializing database...")
+    
     try:
         # Test connection
         client = get_mongo_client()
@@ -249,21 +303,24 @@ def init_database():
         # Initialize default data
         initialize_default_data()
         
-        logging.info("Database initialized successfully")
+        logger.info("Database initialized successfully")
         
     except Exception as e:
-        logging.error(f"Database initialization failed: {e}")
+        logger.error(f"Database initialization failed: {e}", exc_info=True)
         raise
 
 def check_database_health() -> bool:
     """Check if database is healthy and accessible"""
+    logger.debug("Checking database health...")
+    
     try:
         client = get_mongo_client()
         # Ping the database
         client.admin.command('ping')
+        logger.debug("Database health check passed")
         return True
     except Exception as e:
-        logging.error(f"Database health check failed: {e}")
+        logger.error(f"Database health check failed: {e}")
         return False
 
 def close_database_connection():
@@ -271,12 +328,13 @@ def close_database_connection():
     global mongo_client, db
     try:
         if mongo_client:
+            logger.info("Closing MongoDB connection...")
             mongo_client.close()
             mongo_client = None
             db = None
-            logging.info("Database connection closed")
+            logger.info("MongoDB connection closed successfully")
     except Exception as e:
-        logging.error(f"Error closing database connection: {e}")
+        logger.error(f"Error closing database connection: {e}", exc_info=True)
 
 # Utility functions for MongoDB ObjectId handling
 def str_to_objectid(id_str: str) -> ObjectId:

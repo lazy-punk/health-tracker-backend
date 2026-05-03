@@ -6,8 +6,22 @@ from datetime import datetime, date, timedelta
 from typing import Optional, List, Dict, Any
 from pydantic import BaseModel, Field, EmailStr
 from bson import ObjectId
+from logtail import LogtailHandler
 from pymongo.errors import DuplicateKeyError
+import os
+from dotenv import load_dotenv
 from database import get_collection, COLLECTIONS, serialize_doc, serialize_docs
+load_dotenv()
+
+
+
+# Get logger for this module
+logger = logging.getLogger(__name__)
+handler = LogtailHandler(
+    source_token=os.getenv("LOGTAIL_SOURCE_TOKEN"),
+    host=os.getenv("LOGTAIL_HOST")
+)
+logger.addHandler(handler)
 
 # ==================== PYDANTIC MODELS ====================
 
@@ -94,6 +108,9 @@ class UserModel:
     @staticmethod
     def create_user(username: str, email: str, password: str) -> Optional[UserResponse]:
         """Create a new user in MongoDB"""
+        logger.info(f"Creating new user: [REDACTED]")
+        # logger.debug(f"User details - Username: [REDACTED], Email: [REDACTED]")
+        
         try:
             users_collection = get_collection(COLLECTIONS['users'])
             
@@ -109,26 +126,31 @@ class UserModel:
                 "last_progress_date": None
             }
             
+            logger.debug("Inserting user document into database...")
             result = users_collection.insert_one(user_doc)
             user_doc['_id'] = result.inserted_id
             
             serialized_user = serialize_doc(user_doc)
+            logger.info(f"User created successfully: [REDACTED] (ID: {str(result.inserted_id)})")
             return UserResponse(**serialized_user)
             
         except DuplicateKeyError:
-            logging.error(f"User with username {username} or email {email} already exists")
+            logger.error(f"User with username [REDACTED] or email [REDACTED] already exists")
             return None
         except Exception as e:
-            logging.error(f"Error creating user: {e}")
+            logger.error(f"Error creating user: {e}", exc_info=True)
             return None
 
     @staticmethod
     def get_user_by_username(username: str) -> Optional[Dict[str, Any]]:
         """Get user by username or email"""
+        logger.debug(f"Looking up user: [REDACTED]")
+        
         try:
             users_collection = get_collection(COLLECTIONS['users'])
             
             # Search by username or email
+            logger.debug("Searching for user by username or email...")
             user = users_collection.find_one({
                 "$or": [
                     {"username": username},
@@ -136,68 +158,92 @@ class UserModel:
                 ]
             })
             
+            if user:
+                logger.debug(f"User found: [REDACTED]")
+            else:
+                logger.debug(f"User not found: [REDACTED]")
+            
             return serialize_doc(user) if user else None
             
         except Exception as e:
-            logging.error(f"Error fetching user by username: {e}")
+            logger.error(f"Error fetching user by username: {e}", exc_info=True)
             return None
 
     @staticmethod
     def get_user_by_id(user_id: str) -> Optional[UserResponse]:
         """Get user by ID"""
+        logger.debug(f"Looking up user by ID: {user_id}")
+        
         try:
             users_collection = get_collection(COLLECTIONS['users'])
             
             user = users_collection.find_one({"_id": ObjectId(user_id)})
             if not user:
+                logger.debug(f"User not found for ID: {user_id}")
                 return None
                 
             serialized_user = serialize_doc(user)
+            logger.debug(f"User found for ID: {user_id}")
             return UserResponse(**serialized_user)
             
         except Exception as e:
-            logging.error(f"Error fetching user by ID: {e}")
+            logger.error(f"Error fetching user by ID: {e}", exc_info=True)
             return None
 
     @staticmethod
     def authenticate_user(username: str, password: str) -> Optional[UserResponse]:
         """Authenticate user credentials"""
+        logger.debug(f"Authenticating user: [REDACTED]")
+        
         try:
             user = UserModel.get_user_by_username(username)
             if not user:
+                logger.debug(f"User not found for authentication: [REDACTED]")
                 return None
             
+            logger.debug("Verifying password...")
             # Import here to avoid circular imports
             from auth import verify_password
             
             # Verify password
             if not verify_password(password, user["password"]):
+                logger.warning(f"Invalid password for user: [REDACTED]")
                 return None
                 
+            logger.info(f"User authenticated successfully: [REDACTED]")
             # Remove password from response
             user_copy = user.copy()
             del user_copy["password"]
             return UserResponse(**user_copy)
             
         except Exception as e:
-            logging.error(f"Error authenticating user: {e}")
+            logger.error(f"Error authenticating user: {e}", exc_info=True)
             return None
 
     @staticmethod
     def update_password(user_id: str, new_password_hash: str) -> bool:
         """Update user password"""
+        logger.info(f"Updating password for user ID: {user_id}")
+        
         try:
             users_collection = get_collection(COLLECTIONS['users'])
             
+            logger.debug("Executing password update query...")
             result = users_collection.update_one(
                 {"_id": ObjectId(user_id)},
                 {"$set": {"password": new_password_hash}}
             )
             
-            return result.modified_count > 0
+            success = result.modified_count > 0
+            if success:
+                logger.info(f"Password updated successfully for user ID: {user_id}")
+            else:
+                logger.warning(f"Password update failed - no document modified for user ID: {user_id}")
+            
+            return success
             
         except Exception as e:
-            logging.error(f"Error updating password: {e}")
+            logger.error(f"Error updating password: {e}", exc_info=True)
             return False
 
     @staticmethod
